@@ -1,0 +1,7 @@
+# .gitignore
+videos/
+runs/
+weights/
+*.mp4
+*.avi
+*.pt
