@@ -4,6 +4,13 @@ from ultralytics import YOLO
 from PIL import Image
 import uuid
 from wagon_detector import process_video
+import cv2
+import numpy as np
+import easyocr
+
+reader = easyocr.Reader(['en']) 
+
+
 
 # --- Config ---
 VIDEO_FOLDER = "videos"
@@ -24,6 +31,8 @@ st.title("🚆 Wagon Detection App")
 # 🧭 Tabs
 # ----------------------------------
 tab1, tab2 = st.tabs(["🖼️ Image Detection", "🎥 Video Detection"])
+
+
 
 # ----------------------------------
 # 🖼️ Image Detection Tab
@@ -58,7 +67,7 @@ with tab1:
         st.image(img_path, caption="Original Image", use_column_width=True)
 
         st.info("🔍 Running YOLO detection...")
-        model(
+        results = model(
             img_path,
             save=True,
             project="runs/detect",
@@ -66,13 +75,41 @@ with tab1:
             exist_ok=True
         )
 
-
         result_img_path = os.path.join(IMAGE_OUTPUT_FOLDER, os.path.basename(img_path))
         if os.path.exists(result_img_path):
             st.success("✅ Detection complete!")
             st.image(result_img_path, caption="Detected Image", use_column_width=True)
+
+            # ----------------------------------
+            # 🔍 OCR on Cropped Regions
+            # ----------------------------------
+            st.subheader("🔠 OCR from Detected ROIs")
+
+            image_cv = cv2.imread(img_path)
+
+            for result in results:
+                boxes = result.boxes
+                if boxes is None:
+                    st.warning("No bounding boxes found.")
+                    continue
+
+                xyxy = boxes.xyxy.cpu().numpy().astype(int)
+
+                for i, (x1, y1, x2, y2) in enumerate(xyxy):
+                    roi = image_cv[y1:y2, x1:x2]
+                    if roi.size == 0:
+                        continue
+
+                    # Convert to RGB for display
+                    roi_rgb = cv2.cvtColor(roi, cv2.COLOR_BGR2RGB)
+                    text_result = reader.readtext(roi, detail=0)
+                    ocr_text = ", ".join(text_result) if text_result else "No text found"
+
+                    st.image(roi_rgb, caption=f"OCR Result {i+1}: {ocr_text}", use_column_width=False)
+
         else:
             st.error("❌ Failed to find result.")
+
 
 # ----------------------------------
 # 🎥 Video Detection Tab
